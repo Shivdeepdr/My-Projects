@@ -1,0 +1,58 @@
+
+Welcome to My GitHub Profile!
+Hello, and welcome to my GitHub profile! Here you'll find a collection of projects I've worked on across data science, machine learning, and data engineering. Each project showcases my skills in Python, SQL, machine learning, data modeling, and visualization. Below is a brief overview of some of the key projects hosted here:
+
+
+Project Overview
+1. Circle_boundary_Mean_curvature_flow.py
+Description: This project simulates grain boundary migration in a single crystal interface using the diffused-domain approach, mean-curvature flow, and finite difference methods (FDM) in Python 3. The model analyzes both isotropic and anisotropic behavior during migration, achieving an accuracy between 80%–92%. It also explores the dependency between grain boundary migration, stress, and chemical potential.
+
+Key Features:
+Simulates complex physical behavior using the mean curvature flow.
+Models migration dynamics in both isotropic and anisotropic conditions.
+Developed using Python 3, NumPy, and SciPy.
+Use Case: Useful for studying grain boundary migration dynamics and analyzing material science properties.
+
+2. END_to_END_creating_star_schema_for_dvd_rental_data_data_warehouse_project.sql
+Description: This project involves developing a data warehouse by importing a DVD rental database into PostgreSQL. Complex SQL queries were used for data modeling, including creating indexes, views, and stored procedures. Both star and snowflake schema designs were implemented, with the project demonstrating a 20% improvement in query performance after optimization.
+
+Key Features:
+Imported DVD rental data and performed data modeling with PostgreSQL.
+Built star and snowflake schemas with fact and dimension tables.
+Optimized queries for performance improvement.
+Extracted key business insights such as city-wise revenue using complex SQL queries.
+Use Case: Designed for understanding efficient data warehousing and improving query performance.
+
+3. ETL_Euros_football_statistics_data_upload_to_d
+Description: Developed an ETL pipeline to handle Euros football statistics data, including team/player bios, match stats, and financial data. The pipeline ensures data integrity and loads into relational databases using PostgreSQL. Data visualization through Power BI helped in deriving key insights for decision-makers.
+
+Key Features:
+Built a 3NF-compliant data model for clean and scalable data architecture.
+Developed ETL pipelines using Python, PostgreSQL, and Power BI.
+Performed data cleaning and aggregation for insightful reporting.
+Created Power BI dashboards to visualize KPIs and trends.
+Use Case: This project is great for automating the extraction and reporting of sports analytics and financial data.
+
+4. buldozzer_price_prediction_regression_model.ipynb
+Description: This project involves building a regression model for predicting bulldozer prices using historical sales data. The model was built using scikit-learn and optimized via hyperparameter tuning and feature engineering to achieve a high prediction accuracy with an RMSLE score of 0.246.
+
+Key Features:
+Implemented a regression model for price prediction using time series data.
+Applied data preprocessing, feature engineering, and hyperparameter tuning.
+Visualized the data and model results using Matplotlib.
+Use Case: Useful for predicting equipment prices in the heavy machinery industry, optimizing buying/selling decisions.
+
+5. heart_disease_classification_project.ipynb
+Description: Developed a heart disease classification model using logistic regression, random forest, and KNN algorithms. The best performance was achieved with logistic regression, with a precision of 0.89, recall of 0.86, and F1 score of 0.88. The project involved comprehensive data preprocessing and evaluation of different classification models.
+
+Key Features:
+Developed using Python with scikit-learn, NumPy, Pandas, and Matplotlib.
+Performed feature engineering and data preprocessing for model improvement.
+Achieved high accuracy with logistic regression for heart disease prediction.
+Use Case: Predicting heart disease for healthcare applications and improving early diagnosis.
+Feel free to explore each repository for more details, code snippets, and documentation. If you have any questions or suggestions, feel free to open an issue or reach out via the provided contact details.
+
+Contact Me:
+
+GitHub: https://github.com/Shivdeepdr/My-Projects.git
+Email: shivdeepdr@gmail.com
