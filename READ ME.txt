@@ -6,7 +6,7 @@ Hello, and welcome to my GitHub profile! Here you'll find a collection of projec
 Project Overview
 
 1. End-to-End Data Pipeline and Historical Data Management in Snowflake Using SCD Type 2 for Gym Membership Dataset.
-
+Files belonging to this project: i) Gym_membership_project_tables_and _data_import_code, ii) Stored procedure and task for gym data merg
 a) Dataset Source: Found a gym membership dataset from Kaggle at this URL: https://www.kaggle.com/datasets/ka66ledata/gym-membership-dataset/data. Unfortunately, contract data was unavailable..
 
 b) Data Upload: I created external stages in Snowflake and used SnowSQL to load the gym data into Snowflake for further processing.
