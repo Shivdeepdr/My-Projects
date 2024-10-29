@@ -1,0 +1,426 @@
+############Loading raw data from local machine to snowflake###########
+
+CREATE OR REPLACE STAGE my_stagging_env;
+SHOW STAGES;
+
+USE DATABASE STA;
+-- Data From kaggle
+CREATE OR REPLACE TABLE raw_gym_data(
+  id INTEGER,
+  gender VARCHAR(20),
+  birthday DATE,
+  age INTEGER,
+  abonoment_type VARCHAR(50),
+  visit_per_week INTEGER,
+  days_per_week VARCHAR(80),
+  attend_group_lesson BOOLEAN,
+  fav_group_lesson VARCHAR(80),
+  avg_time_check_in TIME,
+  avg_time_check_out TIME,
+  avg_time_in_gym INT,
+  drink_abo BOOLEAN,
+  fav_drink VARCHAR(100),
+  personal_training BOOLEAN,
+  name_personal_trainer VARCHAR(200),
+  uses_sauna BOOLEAN
+);
+
+CREATE OR REPLACE FILE FORMAT my_csv_format
+  TYPE = 'CSV'
+  FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+  SKIP_HEADER = 1 
+  NULL_IF = ('NULL', 'null', '')
+  EMPTY_FIELD_AS_NULL = TRUE
+  FIELD_DELIMITER = ',';
+
+-- Copy items from stagging_env to snowflake table
+COPY INTO STA.PUBLIC.raw_gym_data FROM @STA.PUBLIC.my_stagging_env/gym_membership.csv
+FILE_FORMAT = (FORMAT_NAME = 'my_csv_format');
+
+SELECT * FROM RAW_GYM_DATA;
+
+
+
+CREATE OR REPLACE STAGE STA.PUBLIC.stagging_env;
+SHOW STAGES;
+
+-- New table new_raw_gym_data holds new data with same id required for the merge procedure into SCD type 2 tables 
+CREATE  OR REPLACE TABLE STA.PUBLIC.NEW_RAW_GYM_DATA(
+  id INTEGER,
+  gender VARCHAR(20),
+  birthday DATE,
+  age INTEGER,
+  abonoment_type VARCHAR(50),
+  visit_per_week INTEGER,
+  days_per_week VARCHAR(80),
+  attend_group_lesson BOOLEAN,
+  fav_group_lesson VARCHAR(80),
+  avg_time_check_in TIME,
+  avg_time_check_out TIME,
+  avg_time_in_gym INT,
+  drink_abo BOOLEAN,
+  fav_drink VARCHAR(100),
+  personal_training BOOLEAN,
+  name_personal_trainer VARCHAR(200),
+  uses_sauna BOOLEAN
+);
+
+COPY INTO STA.PUBLIC.new_raw_gym_data FROM @STA.PUBLIC.stagging_env/new_gym_membership_data.csv
+FILE_FORMAT = (FORMAT_NAME = 'my_csv_format');
+
+
+SELECT * FROM NEW_RAW_GYM_DATA;
+
+
+###########Create 3NF tables (SCD Type 2)###############
+
+CREATE OR REPLACE SCHEMA EDW.GYM_DATA;
+
+USE EDW.GYM_DATA;
+
+-- Create table query
+CREATE OR REPLACE TABLE Customers(
+    id INT NOT NULL PRIMARY KEY,
+    gender VARCHAR(50),
+    birthday DATE,
+    age INT,
+    start_date TIMESTAMP_NTZ,
+    end_date TIMESTAMP_NTZ,
+    is_active BOOLEAN,
+    version_number INT
+    );
+
+    
+
+CREATE OR REPLACE TABLE Membership(
+    membership_id INT AUTOINCREMENT START = 1 INCREMENT = 1 NOT NULL PRIMARY KEY,
+    customers_id INT NOT NULL,
+    abonoment_type VARCHAR(20),
+    visit_per_week INT,
+    days_per_week VARCHAR(50),
+    avg_time_check_in TIME,
+    avg_time_check_out TIME,
+    avg_time_in_gym INT,  
+    start_date TIMESTAMP_LTZ,
+    end_date TIMESTAMP_LTZ,
+    is_active BOOLEAN,
+    version_number INT,
+    FOREIGN KEY (customers_id) REFERENCES Customers(id)    
+);
+
+
+
+CREATE OR REPLACE TABLE Group_lesson(
+    group_lesson_id INT AUTOINCREMENT START = 1 INCREMENT = 1 PRIMARY KEY,
+    customers_id INT NOT NULL,
+    personal_training BOOLEAN,
+    name_personal_trainer VARCHAR(100),
+    start_date TIMESTAMP_NTZ,
+    end_date TIMESTAMP_NTZ,
+    is_active BOOLEAN,
+    version_number INT,
+    FOREIGN KEY (customers_id) REFERENCES Customers(id)
+);
+ALTER TABLE Group_lesson ADD COLUMN start_date TIMESTAMP_NTZ;
+ALTER TABLE Group_lesson ADD COLUMN end_date TIMESTAMP_NTZ;
+
+
+
+CREATE OR REPLACE TABLE Sauna_usage(
+    sauna_usage_id INT AUTOINCREMENT START = 1 INCREMENT = 1 NOT NULL PRIMARY KEY,
+    customer_id INT,
+    uses_sauna BOOLEAN,
+    start_date TIMESTAMP_NTZ,
+    end_date TIMESTAMP_NTZ,
+    is_active BOOLEAN,
+    version_number INT,
+    FOREIGN KEY (customer_id) REFERENCES Customers(id)
+);
+ALTER TABLE Sauna_usage ADD COLUMN start_date TIMESTAMP_NTZ;
+ALTER TABLE Sauna_usage ADD COLUMN end_date TIMESTAMP_NTZ;
+
+
+
+
+CREATE OR REPLACE TABLE Drink_subscription(
+    drink_subscription_id INT AUTOINCREMENT START = 1 INCREMENT = 1 NOT NULL PRIMARY KEY,
+    customer_id INT NOT NULL,
+    drink_abo BOOLEAN,
+    fav_drink VARCHAR(60),
+    start_date TIMESTAMP_NTZ,
+    end_date TIMESTAMP_NTZ,
+    is_active BOOLEAN,
+    version_number INT,
+    FOREIGN KEY (customer_id) REFERENCES Customers(id)
+);
+ALTER TABLE Drink_subscription ADD COLUMN start_date TIMESTAMP_NTZ;
+ALTER TABLE Drink_subscription ADD COLUMN end_date TIMESTAMP_NTZ;
+ALTER TABLE drink_subscription MODIFY COLUMN drink_subscription_id DROP NOT NULL;
+ALTER TABLE drink_subscription ADD COLUMN is_active BOOLEAN;
+
+
+
+
+-- Insert Statements 
+INSERT INTO  Customers(ID,GENDER,BIRTHDAY,AGE,start_date,end_date, is_active, version_number)
+SELECT DISTINCT id, gender, birthday,age, CURRENT_DATE as start_date, NULL as end_date,  
+TRUE as is_active,1 as version_number FROM STA.PUBLIC.raw_gym_data;
+SELECT * FROM CUSTOMERS ORDER BY ID ASC;
+
+
+
+
+INSERT INTO drink_subscription(customer_id, drink_abo, fav_drink, start_date, end_date,  is_active, version_number)
+SELECT id, drink_abo, fav_drink, CURRENT_DATE as start_date, NULL as end_date, True as is_active, 1 as version_number FROM STA.PUBLIC.raw_gym_data;
+
+SELECT * FROM drink_subscription;
+
+
+-- code to fill the null pkey drink_subscription_id (No SERIAL or IDENTIFY command in snowflake)
+CREATE OR REPLACE SEQUENCE drink_subscription_seq START = 1 INCREMENT = 1;
+UPDATE drink_subscription SET drink_subscription_id = drink_subscription_seq.nextval
+WHERE drink_subscription_id IS NULL;
+SELECT * FROM drink_subscription ORDER BY drink_subscription_id ASC;
+
+
+
+
+INSERT INTO membership(customers_id, abonoment_type, visit_per_week, days_per_week, avg_time_check_in,
+avg_time_check_out,  avg_time_in_gym, start_date,end_date, is_active, version_number)
+SELECT id, abonoment_type, visit_per_week, days_per_week, avg_time_check_in,
+avg_time_check_out,  avg_time_in_gym, CURRENT_TIMESTAMP as start_date, NULL as end_date, TRUE as is_active,
+1 as version_number
+FROM STA.PUBLIC.raw_gym_data;
+SELECT COUNT(*) FROM membership;
+
+
+
+CREATE OR REPLACE SEQUENCE GROUP_LESSON_ID_seq START = 1 INCREMENT = 1;
+INSERT INTO group_lesson(group_lesson_id, customers_id, personal_training, name_personal_trainer, 
+start_date, end_date, is_active, version_number)
+SELECT group_lesson_id_seq.nextval, id, personal_training, name_personal_trainer, CURRENT_DATE as start_date, NULL as end_date, TRUE as is_active, 1 as version_number 
+FROM STA.PUBLIC.raw_gym_data;
+SELECT * FROM group_lesson;
+
+
+
+
+CREATE OR REPLACE SEQUENCE sauna_usage_id_seq START = 1 INCREMENT = 1;
+INSERT INTO sauna_usage(sauna_usage_id, customer_id, uses_sauna, start_date, end_date, is_active, version_number)
+SELECT sauna_usage_id_seq.nextval, id, uses_sauna, CURRENT_DATE as start_date, NULL as end_date, TRUE as is_active, 1 as version_number
+FROM STA.PUBLIC.raw_gym_data;
+SELECT * FROM sauna_usage;
+
+
+
+
+-- Query
+SELECT * FROM MEMBERSHIP WHERE END_DATE is NOT NULL;
+SELECT * FROM MEMBERSHIP;
+SELECT COUNT(*) FROM MEMBERSHIP;
+
+
+
+############## Snowflake schema code SCD type 2 tables ########################
+
+-- Create a Snowflake Schema for a specific buisness used case
+CREATE OR REPLACE SCHEMA EDW.SNOWFLAKE_SCHEMA_GYM_DATA;
+
+CREATE OR REPLACE TABLE EDW.SNOWFLAKE_SCHEMA_GYM_DATA.Membership_fact(
+    fact_id INT AUTOINCREMENT START = 1 INCREMENT  = 1 NOT NULL PRIMARY KEY,
+    membership_id INT,
+    customer_id INT,
+    drink_subscription_id INT,
+    group_lesson_id INT,
+    sauna_usage_id INT,
+    abonoment_type VARCHAR(50),
+    avg_time_check_in TIME,
+    avg_time_check_out TIME,
+    duration_in_gym INT,
+    total_visits_per_week INT,
+    start_date TIMESTAMP_LTZ,
+    end_date TIMESTAMP_LTZ,
+    is_active BOOLEAN,
+    version_number INT,
+    FOREIGN KEY (membership_id) REFERENCES EDW.SNOWFLAKE_SCHEMA_GYM_DATA.dim_membership(membership_id),
+    FOREIGN KEY (customer_id) REFERENCES EDW.SNOWFLAKE_SCHEMA_GYM_DATA.dim_customer(customer_id),
+    FOREIGN KEY (drink_subscription_id) REFERENCES      
+    EDW.SNOWFLAKE_SCHEMA_GYM_DATA.dim_drink_subscription(drink_subscription_id),
+    FOREIGN KEY (group_lesson_id) REFERENCES 
+    EDW.SNOWFLAKE_SCHEMA_GYM_DATA.dim_group_lesson(group_lesson_id),
+    FOREIGN KEY (sauna_usage_id) REFERENCES EDW.SNOWFLAKE_SCHEMA_GYM_DATA.dim_sauna_usage(sauna_usage_id)
+);
+
+
+
+CREATE OR REPLACE TABLE EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_CUSTOMER(
+    customer_id INT AUTOINCREMENT NOT NULL PRIMARY KEY,
+    gender VARCHAR(20),
+    birthday DATE,
+    age INT,
+    address VARCHAR(200),
+    address_id INT,
+    FOREIGN KEY (address_id) REFERENCES EDW.SNOWFLAKE_SCHEMA_GYM_DATA.dim_address(address_id),
+    start_date TIMESTAMP_LTZ,
+    end_date TIMESTAMP_LTZ,
+    is_active BOOLEAN,
+    version_number INT
+);
+
+
+
+CREATE OR REPLACE TABLE EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_ADDRESS(
+    address_id INT AUTOINCREMENT START = 1 INCREMENT = 1 NOT NULL PRIMARY KEY,
+    street VARCHAR(100),
+    city VARCHAR(50),
+    zip_code INT,
+    start_date TIMESTAMP_LTZ,
+    end_date TIMESTAMP_LTZ,
+    is_active BOOLEAN,
+    version_number INT
+);
+
+
+
+CREATE OR REPLACE TABLE EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP(
+    membership_id INT AUTOINCREMENT START = 1 INCREMENT = 1 NOT NULL PRIMARY KEY,
+    customers_id INT,
+    abonoment_type VARCHAR(20),
+    visit_per_week INT,
+    days_per_week VARCHAR(50),
+    avg_time_check_in TIME,
+    avg_time_check_out TIME,
+    avg_time_in_gym INT,
+    start_date TIMESTAMP_LTZ,
+    end_date TIMESTAMP_LTZ,
+    is_active BOOLEAN,
+    version_number INT,
+    FOREIGN KEY (customers_id) REFERENCES EDW.SNOWFLAKE_SCHEMA_GYM_DATA.dim_customer(customer_id)
+);
+
+
+CREATE OR REPLACE TABLE EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_GROUP_LESSON(
+    group_lesson_id INT AUTOINCREMENT START = 1 INCREMENT = 1 NOT NULL PRIMARY KEY,
+    personal_instructor_id INT,
+    Personal_training BOOLEAN,
+    start_date TIMESTAMP_LTZ,
+    end_date TIMESTAMP_LTZ,
+    is_active BOOLEAN,
+    version_number INT,
+    FOREIGN KEY (personal_instructor_id) REFERENCES EDW.GYM_DATA.GROUP_LESSON
+);
+
+
+
+CREATE OR REPLACE TABLE EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_INSTRUCTOR(
+    personal_instructor_id INT AUTOINCREMENT START = 1 INCREMENT = 1 NOT NULL PRIMARY KEY,
+    name_personal_trainer VARCHAR(100),
+    start_date TIMESTAMP_LTZ,
+    end_date TIMESTAMP_LTZ,
+    is_active BOOLEAN,
+    version_number INT
+);
+
+
+
+CREATE OR REPLACE TABLE EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_DRINK_SUBSCRIPTION(
+  drink_subscription_id INT AUTOINCREMENT START = 1 INCREMENT = 1 NOT NULL PRIMARY KEY,
+  drink_abo BOOLEAN,
+  Fav_drink VARCHAR(60),
+  start_date TIMESTAMP_LTZ,
+  end_date TIMESTAMP_LTZ,
+  is_active BOOLEAN,
+  version_number INT
+);
+
+
+
+CREATE OR REPLACE TABLE EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_SAUNA_USAGE(
+    sauna_usage_id INT AUTOINCREMENT NOT NULL PRIMARY KEY,
+    uses_sauna BOOLEAN,
+    start_date TIMESTAMP_LTZ,
+    end_date TIMESTAMP_LTZ,
+    is_active BOOLEAN,
+    version_number INT
+);
+
+
+
+
+-- INSERT 
+
+INSERT INTO EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_DRINK_SUBSCRIPTION(drink_abo, fav_drink, start_date, end_date, is_active, version_number)
+SELECT drink_abo, fav_drink, CURRENT_TIMESTAMP as start_date, NULL as end_date, TRUE as is_active, 1 as version_number
+FROM EDW.GYM_DATA.DRINK_SUBSCRIPTION;
+SELECT * FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_DRINK_SUBSCRIPTION;
+
+
+
+INSERT INTO EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_GROUP_LESSON(personal_instructor_id, personal_training, start_date, end_date, is_active,version_number)
+SELECT gl.group_lesson_id, gl.personal_training, CURRENT_TIMESTAMP as start_date, NULL as end_date, TRUE as is_active, 1 as version_number
+FROM EDW.GYM_DATA.GROUP_LESSON gl;
+JOIN EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_INSTRUCTOR di 
+ON gl.group_lesson_id = di.personal_instructor_id;
+SELECT * FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_GROUP_LESSON;
+
+
+
+
+INSERT INTO EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_INSTRUCTOR(name_personal_trainer, start_date,end_date,is_active, version_number)
+SELECT name_personal_trainer, CURRENT_DATE as stat_date, NULL as end_date, TRUE as is_active , 1 as version_number  
+FROM  EDW.GYM_DATA.GROUP_LESSON;
+SELECT * FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_INSTRUCTOR;
+
+
+
+INSERT INTO EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP(customers_id, abonoment_type, visit_per_week, days_per_week,
+avg_time_check_in,avg_time_check_out, avg_time_in_gym, start_date, end_date, is_active, version_number)
+SELECT id,abonoment_type, visit_per_week, days_per_week, avg_time_check_in, avg_time_check_out, avg_time_in_gym, CURRENT_TIMESTAMP as start_date, NULL as end_date, TRUE as is_active, 1 as version_number
+FROM STA.PUBLIC.RAW_GYM_DATA;
+SELECT * FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP;
+SELECT COUNT(*) FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP;
+
+
+
+INSERT INTO EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_ADDRESS(street, city,zip_code,start_date,end_date,is_active, version_number)
+SELECT NULL as street, NULL as city, NULL as zip_code, CURRENT_DATE as start_date, NULL as end_date,
+TRUE as is_active, 1 as version_number;
+SELECT * FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_ADDRESS;
+
+
+INSERT INTO EDW.SNOWFLAKE_SCHEMA_GYM_DATA.dim_customer(gender, birthday, age, address, start_date, end_date, is_active, version_number)
+SELECT gender, birthday, age, NULL as address, CURRENT_DATE as start_date, NULL as end_date, TRUE as is_active, 1 as version_number 
+FROM EDW.GYM_DATA.Customers;
+SELECT * FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.dim_customer;
+
+
+
+INSERT INTO EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_SAUNA_USAGE(uses_sauna, start_date, end_date, is_active, version_number)
+SELECT uses_sauna, CURRENT_TIMESTAMP as start_date, NULL as end_date, TRUE as is_active , 1 as version_number
+FROM EDW.GYM_DATA.SAUNA_USAGE;
+SELECT * FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_SAUNA_USAGE;
+
+
+
+INSERT INTO EDW.SNOWFLAKE_SCHEMA_GYM_DATA.MEMBERSHIP_FACT(membership_id, customer_id, drink_subscription_id, group_lesson_id, sauna_usage_id,abonoment_type, avg_time_check_in,avg_time_check_out, duration_in_gym, total_visits_per_week,
+start_date, end_date, is_active, version_number)
+SELECT dm.membership_id, ds.customer_id, dds.drink_subscription_id, dg.group_lesson_id,
+dsu.sauna_usage_id, dm.abonoment_type, dm.avg_time_check_in, dm.avg_time_check_out, dm.avg_time_in_gym, 
+dm.visit_per_week, CURRENT_DATE as start_date, NULL as end_date, TRUE as is_active, 1 as version_number
+FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP dm
+JOIN EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_CUSTOMER ds ON dm.membership_id = ds.customer_id
+JOIN EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_DRINK_SUBSCRIPTION dds ON dm.membership_id = dds.drink_subscription_id
+JOIN EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_GROUP_LESSON dg ON dm.membership_id = dg.group_lesson_id
+JOIN EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_SAUNA_USAGE dsu ON dm.membership_id = dsu.sauna_usage_id;
+
+
+
+
+SELECT * FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.MEMBERSHIP_FACT;
+
+
+SELECT * FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP ORDER BY CUSTOMERS_ID ASC;
+SELECT COUNT(*) FROM EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP;
+
+
+

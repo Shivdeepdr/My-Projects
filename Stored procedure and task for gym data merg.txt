@@ -1,0 +1,70 @@
+################## Stored Procedure to merge data from raw data to dim_membership SCD type 2 table ###################
+
+CREATE OR REPLACE PROCEDURE EDW.SNOWFLAKE_SCHEMA_GYM_DATA.MERGE_DATA_TO_SCDT2_DIM_MEMBERSHIP()
+RETURNS STRING
+LANGUAGE SQL
+AS
+
+BEGIN
+    MERGE INTO EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP t
+    USING STA.PUBLIC.NEW_RAW_GYM_DATA s
+    ON t.customers_id = s.id AND t.is_active = TRUE
+
+    WHEN MATCHED AND (
+        t.abonoment_type <> s.abonoment_type OR
+        t.avg_time_check_in <> s.avg_time_check_in OR
+        t.avg_time_check_out <> s.avg_time_check_out OR
+        t.avg_time_in_gym <> s.avg_time_in_gym OR
+        t.visit_per_week <> s.visit_per_week  
+    ) THEN
+        -- When matched set the current active record to inactive with end date as current date and time
+        UPDATE SET 
+            t.end_date = CURRENT_DATE,         
+            t.is_active = FALSE
+            
+        -- When not matched insert new recods
+    WHEN NOT MATCHED THEN
+        INSERT (
+            customers_id, abonoment_type, visit_per_week, days_per_week, avg_time_check_in,         
+            avg_time_check_out,
+            avg_time_in_gym, start_date, end_date, is_active, version_number)
+        VALUES (
+            s.id, s.abonoment_type, s.visit_per_week, s.days_per_week, s.avg_time_check_in, 
+            s.avg_time_check_out, s.avg_time_in_gym, CURRENT_DATE, NULL, TRUE, 1);
+    
+    -- Insert new records which were updated as they matched change version_number and enddata to null  
+    INSERT INTO EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP (
+        customers_id, abonoment_type, visit_per_week, days_per_week, avg_time_check_in,     
+        avg_time_check_out, avg_time_in_gym, start_date, end_date, is_active, version_number)
+    SELECT 
+        s.id, s.abonoment_type, s.visit_per_week, s.days_per_week, s.avg_time_check_in, 
+        s.avg_time_check_out, s.avg_time_in_gym, CURRENT_DATE, NULL, TRUE, t.version_number + 1
+        FROM STA.PUBLIC.NEW_RAW_GYM_DATA s
+        LEFT JOIN EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP t
+        ON s.id = t.customers_id AND t.is_active = FALSE
+        WHERE t.customers_id IS NOT NULL;
+   
+
+    RETURN 'SCD Type 2 Merge Operation Completed Successfully';
+END;
+
+
+
+################ TASK to reun the stored procedure #############################
+
+
+CREATE OR REPLACE TASK EDW.SNOWFLAKE_SCHEMA_GYM_DATA.TSK_SNOWFLAKE_SCHEMA_DATA_MERG
+    WAREHOUSE = 'COMPUTE_WH'
+    SCHEDULE = '60 MINUTE'
+    AS
+    
+    -- A view can be created for stagging only the lastest records (sample code not used)
+    
+    -- CREATE OR REPLACE VIEW STA.PUBLIC.V_MEMBERSHIP;
+    -- INSERT INTO (abonoment_type, avg_time_check_in, avg_time_check_out, avg_time_in_gym, visit_per_week)
+    -- SELECT abonoment_type, avg_time_check_in, avg_time_check_out, avg_time_in_gym, visit_per_week
+    -- FROM STA.PUBLIC.NEW_RAW_GYM_DATA rd
+    -- WHERE rd.end_date > max(m.end_date)
+    -- JOIN EDW.GYM_DATA.MEMBERSHIP m on m.customers_id = rd.id;
+    
+    CALL EDW.SNOWFLAKE_SCHEMA_GYM_DATA.MERGE_DATA_TO_SCDT2_DIM_MEMBERSHIP()
