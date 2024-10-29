@@ -4,14 +4,28 @@ Hello, and welcome to my GitHub profile! Here you'll find a collection of projec
 
 
 Project Overview
-1. Circle_boundary_Mean_curvature_flow.py
-Description: This project simulates grain boundary migration in a single crystal interface using the diffused-domain approach, mean-curvature flow, and finite difference methods (FDM) in Python 3. The model analyzes both isotropic and anisotropic behavior during migration, achieving an accuracy between 80%–92%. It also explores the dependency between grain boundary migration, stress, and chemical potential.
 
-Key Features:
-Simulates complex physical behavior using the mean curvature flow.
-Models migration dynamics in both isotropic and anisotropic conditions.
-Developed using Python 3, NumPy, and SciPy.
-Use Case: Useful for studying grain boundary migration dynamics and analyzing material science properties.
+1. End-to-End Data Pipeline and Historical Data Management in Snowflake Using SCD Type 2 for Gym Membership Dataset.
+
+a) Dataset Source: Found a gym membership dataset from Kaggle at this URL: https://www.kaggle.com/datasets/ka66ledata/gym-membership-dataset/data. Unfortunately, contract data was unavailable..
+
+b) Data Upload: I created external stages in Snowflake and used SnowSQL to load the gym data into Snowflake for further processing.
+
+c) Schema Design:
+
+I set up a staging area (STA.PUBLIC) where the raw data resides.
+For the enterprise data warehouse, I established the EDW database, with two schemas:
+EDW.GYM_DATA: This is in 3rd normal form with all tables adhering to SCD Type 2 for historical tracking.
+EDW.SNOWFLAKE_SCHEMA_GYM_DATA: This schema contains a Snowflake schema model, with all tables also in SCD Type 2. I’m attaching an image that shows the Snowflake schema data model for clarity.
+
+d) Stored Procedure: I wrote a stored procedure, EDW.SNOWFLAKE_SCHEMA_GYM_DATA.MERGE_DATA_TO_SCDT2_DIM_MEMBERSHIP(), to merge data from STA.PUBLIC.NEW_RAW_DATA (with 20 rows, with matching IDs) into the EDW.SNOWFLAKE_SCHEMA_GYM_DATA.DIM_MEMBERSHIP table. Here’s a brief overview of the stored procedure’s operations. I have corrected my mistake I made previously where I programmed SCD type 1 insted of 2 in this project.
+
+Update: If there’s a match on ID, it updates the existing record by setting the end_date to the current date and time and is_active to FALSE.
+Insert: It then adds a new record with the current start date, sets is_active to TRUE, and increments the version_number to track changes. 
+Tracking Logic: I use the customer_id as a surrogate key to link rows of the same entity, and leverage customer_id and is_active columns for update and insert operations.
+When Not matched it inserts new rows to the table with start data as current date and time and end data is null and is-active as true.
+
+e) Automated Task: I created a task to run the stored procedure, allowing for automated updates (EDW.SNOWFLAKE_SCHEMA_GYM_DATA.TSK_SNOWFLAKE_SCHEMA_DATA_MERG)
 
 2. END_to_END_creating_star_schema_for_dvd_rental_data_data_warehouse_project.sql
 Description: This project involves developing a data warehouse by importing a DVD rental database into PostgreSQL. Complex SQL queries were used for data modeling, including creating indexes, views, and stored procedures. Both star and snowflake schema designs were implemented, with the project demonstrating a 20% improvement in query performance after optimization.
@@ -23,7 +37,8 @@ Optimized queries for performance improvement.
 Extracted key business insights such as city-wise revenue using complex SQL queries.
 Use Case: Designed for understanding efficient data warehousing and improving query performance.
 
-3. ETL_Euros_football_statistics_data_upload_to_d
+3. ETL_Euros_football_statistics_data_upload_to_database
+
 Description: Developed an ETL pipeline to handle Euros football statistics data, including team/player bios, match stats, and financial data. The pipeline ensures data integrity and loads into relational databases using PostgreSQL. Data visualization through Power BI helped in deriving key insights for decision-makers.
 
 Key Features:
@@ -33,7 +48,18 @@ Performed data cleaning and aggregation for insightful reporting.
 Created Power BI dashboards to visualize KPIs and trends.
 Use Case: This project is great for automating the extraction and reporting of sports analytics and financial data.
 
-4. buldozzer_price_prediction_regression_model.ipynb
+
+4. Circle_boundary_Mean_curvature_flow.py
+Description: This project simulates grain boundary migration in a single crystal interface using the diffused-domain approach, mean-curvature flow, and finite difference methods (FDM) in Python 3. The model analyzes both isotropic and anisotropic behavior during migration, achieving an accuracy between 80%–92%. It also explores the dependency between grain boundary migration, stress, and chemical potential.
+
+Key Features:
+Simulates complex physical behavior using the mean curvature flow.
+Models migration dynamics in both isotropic and anisotropic conditions.
+Developed using Python 3, NumPy, and SciPy.
+Use Case: Useful for studying grain boundary migration dynamics and analyzing material science properties.
+
+
+5. buldozzer_price_prediction_regression_model.ipynb
 Description: This project involves building a regression model for predicting bulldozer prices using historical sales data. The model was built using scikit-learn and optimized via hyperparameter tuning and feature engineering to achieve a high prediction accuracy with an RMSLE score of 0.246.
 
 Key Features:
@@ -42,7 +68,7 @@ Applied data preprocessing, feature engineering, and hyperparameter tuning.
 Visualized the data and model results using Matplotlib.
 Use Case: Useful for predicting equipment prices in the heavy machinery industry, optimizing buying/selling decisions.
 
-5. heart_disease_classification_project.ipynb
+6. heart_disease_classification_project.ipynb
 Description: Developed a heart disease classification model using logistic regression, random forest, and KNN algorithms. The best performance was achieved with logistic regression, with a precision of 0.89, recall of 0.86, and F1 score of 0.88. The project involved comprehensive data preprocessing and evaluation of different classification models.
 
 Key Features:
